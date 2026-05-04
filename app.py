@@ -344,7 +344,7 @@ body {
     <div class="field-group">
       <label class="field-label">Topic / Domain</label>
       <span class="field-hint">Separate keywords with commas — these are OR-joined</span>
-      <input class="field-input" id="topicInput" placeholder="e.g. social science, economics" value="social science, economics">
+      <input class="field-input" id="topicInput" placeholder="e.g. wage inequality, economics" value="wage inequality, economics">
     </div>
 
     <div class="field-group">
