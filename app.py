@@ -25,6 +25,8 @@ jobs = {}
 SCOPUS_API_KEY = "a6a4b4a8f0ff49676823b4b795cff8aa"
 WOS_API_KEY = "296c7877068fd5bba5e70c4dd8540bfbbcf37346"
 
+SOURCES = ["arXiv", "OpenAlex", "Scopus", "Web of Science"]
+
 
 # ── Deduplication ──
 
@@ -54,37 +56,46 @@ def deduplicate(papers):
 def run_search(job_id, keywords, date_from, date_to):
     job = jobs[job_id]
     all_results = []
-    counts = {}
+
+    def cancelled():
+        return job.get("status") == "cancelled"
 
     try:
         # 1. arXiv
-        job["progress"] = "Searching arXiv (1/4)..."
+        if cancelled():
+            save_partial(job_id, all_results)
+            return
+        job["sources"]["arXiv"]["status"] = "running"
         try:
             results = search_arxiv(keywords=keywords, time_lower_bound=date_from, time_upper_bound=date_to)
             for r in results:
                 r["source"] = "arXiv"
             all_results.extend(results)
-            counts["arXiv"] = len(results)
+            job["sources"]["arXiv"] = {"status": "done", "count": len(results)}
         except Exception as e:
-            counts["arXiv"] = 0
+            job["sources"]["arXiv"] = {"status": "error", "count": 0, "error": str(e)}
             print(f"arXiv error: {e}")
 
-        job["progress"] = f"arXiv: {counts.get('arXiv', 0)} · Searching OpenAlex (2/4)..."
-
         # 2. OpenAlex
+        if cancelled():
+            save_partial(job_id, all_results)
+            return
+        job["sources"]["OpenAlex"]["status"] = "running"
         try:
             results = search_openalex(keywords=keywords, time_lower_bound=date_from, time_upper_bound=date_to)
             for r in results:
                 r["source"] = "OpenAlex"
             all_results.extend(results)
-            counts["OpenAlex"] = len(results)
+            job["sources"]["OpenAlex"] = {"status": "done", "count": len(results)}
         except Exception as e:
-            counts["OpenAlex"] = 0
+            job["sources"]["OpenAlex"] = {"status": "error", "count": 0, "error": str(e)}
             print(f"OpenAlex error: {e}")
 
-        job["progress"] = f"arXiv: {counts.get('arXiv', 0)} · OpenAlex: {counts.get('OpenAlex', 0)} · Searching Scopus (3/4)..."
-
         # 3. Scopus
+        if cancelled():
+            save_partial(job_id, all_results)
+            return
+        job["sources"]["Scopus"]["status"] = "running"
         try:
             results = search_scopus(
                 keywords=keywords,
@@ -95,14 +106,16 @@ def run_search(job_id, keywords, date_from, date_to):
             for r in results:
                 r["source"] = "Scopus"
             all_results.extend(results)
-            counts["Scopus"] = len(results)
+            job["sources"]["Scopus"] = {"status": "done", "count": len(results)}
         except Exception as e:
-            counts["Scopus"] = 0
+            job["sources"]["Scopus"] = {"status": "error", "count": 0, "error": str(e)}
             print(f"Scopus error: {e}")
 
-        job["progress"] = f"arXiv: {counts.get('arXiv', 0)} · OpenAlex: {counts.get('OpenAlex', 0)} · Scopus: {counts.get('Scopus', 0)} · Searching WoS (4/4)..."
-
         # 4. Web of Science
+        if cancelled():
+            save_partial(job_id, all_results)
+            return
+        job["sources"]["Web of Science"]["status"] = "running"
         try:
             results = search_wos(
                 keywords=keywords,
@@ -113,13 +126,17 @@ def run_search(job_id, keywords, date_from, date_to):
             for r in results:
                 r["source"] = "Web of Science"
             all_results.extend(results)
-            counts["Web of Science"] = len(results)
+            job["sources"]["Web of Science"] = {"status": "done", "count": len(results)}
         except Exception as e:
-            counts["Web of Science"] = 0
+            job["sources"]["Web of Science"] = {"status": "error", "count": 0, "error": str(e)}
             print(f"WoS error: {e}")
 
+        if cancelled():
+            # Save partial results before returning
+            save_partial(job_id, all_results)
+            return
+
         # Deduplicate & save
-        job["progress"] = "Deduplicating..."
         unique = deduplicate(all_results)
 
         output_dir = "output"
@@ -133,21 +150,35 @@ def run_search(job_id, keywords, date_from, date_to):
                 writer.writeheader()
                 writer.writerows(unique)
 
-        parts = [f"{src}: {cnt}" for src, cnt in counts.items() if cnt > 0]
-        summary = " · ".join(parts)
-        dupes = len(all_results) - len(unique)
-
         job["status"] = "done"
-        job["progress"] = f"Done — {len(unique)} unique papers ({summary}, {dupes} duplicates removed)"
         job["csv_path"] = csv_path
         job["count"] = len(unique)
         job["raw_count"] = len(all_results)
-        job["source_counts"] = counts
 
     except Exception as e:
         job["status"] = "error"
         job["error"] = str(e)
-        job["progress"] = f"Error: {e}"
+
+
+def save_partial(job_id, all_results):
+    """Save whatever results we have so far when cancelled."""
+    job = jobs[job_id]
+    unique = deduplicate(all_results)
+
+    output_dir = "output"
+    os.makedirs(output_dir, exist_ok=True)
+    csv_path = os.path.join(output_dir, f"{job_id}.csv")
+
+    if unique:
+        fieldnames = ["title", "authors", "summary", "published", "link", "source"]
+        with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(unique)
+
+    job["csv_path"] = csv_path
+    job["count"] = len(unique)
+    job["raw_count"] = len(all_results)
 
 
 # ── HTML ──
@@ -174,24 +205,13 @@ body {
   text-align: center;
   background: linear-gradient(180deg, #F5F5F0 0%, #FAFAF9 100%);
 }
-.hero h1 {
-  font-size: 40px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: #1C1917;
-  margin-bottom: 8px;
-}
-.hero p {
-  font-size: 16px;
-  color: #78716C;
-  font-weight: 400;
-}
+.hero h1 { font-size: 40px; font-weight: 700; letter-spacing: -0.03em; color: #1C1917; margin-bottom: 8px; }
+.hero p { font-size: 16px; color: #78716C; }
 
 .search-wrap {
   max-width: 620px;
   margin: -20px auto 0;
   padding: 0 24px 80px;
-  position: relative;
 }
 .search-box {
   background: #fff;
@@ -202,176 +222,124 @@ body {
 }
 
 .field-group { margin-bottom: 20px; }
-.field-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #44403C;
-  margin-bottom: 6px;
-  display: block;
-}
-.field-hint {
-  font-size: 11px;
-  color: #A8A29E;
-  margin-bottom: 8px;
-  display: block;
-}
+.field-label { font-size: 13px; font-weight: 600; color: #44403C; margin-bottom: 6px; display: block; }
+.field-hint { font-size: 11px; color: #A8A29E; margin-bottom: 8px; display: block; }
 .field-input {
-  width: 100%;
-  height: 44px;
-  padding: 0 14px;
-  border-radius: 8px;
-  font-size: 14px;
-  border: 1px solid #E7E5E4;
-  background: #FAFAF9;
-  color: #1C1917;
-  font-family: 'Inter', sans-serif;
-  outline: none;
+  width: 100%; height: 44px; padding: 0 14px; border-radius: 8px; font-size: 14px;
+  border: 1px solid #E7E5E4; background: #FAFAF9; color: #1C1917;
+  font-family: 'Inter', sans-serif; outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
-.field-input:focus {
-  border-color: #1C1917;
-  box-shadow: 0 0 0 3px rgba(28,25,23,.06);
-}
+.field-input:focus { border-color: #1C1917; box-shadow: 0 0 0 3px rgba(28,25,23,.06); }
 .field-input::placeholder { color: #D6D3D1; }
 
 .date-row { display: flex; gap: 12px; }
 .date-row .date-field { flex: 1; }
-.date-row .date-field label {
-  font-size: 11px;
-  font-weight: 500;
-  color: #78716C;
-  margin-bottom: 4px;
-  display: block;
-}
+.date-row .date-field label { font-size: 11px; font-weight: 500; color: #78716C; margin-bottom: 4px; display: block; }
 .date-input {
-  width: 100%;
-  height: 40px;
-  padding: 0 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  border: 1px solid #E7E5E4;
-  background: #FAFAF9;
-  color: #1C1917;
-  font-family: 'Inter', sans-serif;
-  outline: none;
+  width: 100%; height: 40px; padding: 0 10px; border-radius: 8px; font-size: 13px;
+  border: 1px solid #E7E5E4; background: #FAFAF9; color: #1C1917;
+  font-family: 'Inter', sans-serif; outline: none;
 }
 .date-input:focus { border-color: #1C1917; }
 
-.divider {
-  border: none;
-  border-top: 1px solid #F5F5F4;
-  margin: 20px 0;
-}
+.divider { border: none; border-top: 1px solid #F5F5F4; margin: 20px 0; }
 
+.btn-row { display: flex; gap: 8px; }
 .submit-btn {
-  width: 100%;
-  height: 48px;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  border: none;
-  background: #1C1917;
-  color: #fff;
-  cursor: pointer;
-  font-family: 'Inter', sans-serif;
-  transition: background 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  flex: 1; height: 48px; border-radius: 8px; font-size: 15px; font-weight: 600;
+  border: none; background: #1C1917; color: #fff; cursor: pointer;
+  font-family: 'Inter', sans-serif; transition: background 0.15s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
 }
 .submit-btn:hover { background: #292524; }
 .submit-btn:disabled { background: #A8A29E; cursor: not-allowed; }
-.submit-btn .arrow { font-size: 18px; opacity: 0.7; }
+.cancel-btn {
+  width: 120px; height: 48px; border-radius: 8px; font-size: 14px; font-weight: 600;
+  border: 1px solid #FCA5A5; background: #FEF2F2; color: #991B1B; cursor: pointer;
+  font-family: 'Inter', sans-serif; transition: background 0.15s; display: none;
+}
+.cancel-btn:hover { background: #FEE2E2; }
 
-.progress-area {
-  margin-top: 16px;
-  display: none;
+/* ── Per-source progress ── */
+.progress-area { margin-top: 20px; display: none; }
+
+.source-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #F5F5F4;
 }
-.progress-bar-track {
-  height: 3px;
-  background: #F5F5F4;
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 10px;
+.source-row:last-child { border-bottom: none; }
+
+.source-icon {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  background: #E7E5E4;
+  transition: background 0.3s;
 }
-.progress-bar-fill {
-  height: 100%;
-  background: #1C1917;
-  width: 0%;
-  border-radius: 2px;
-  transition: width 0.5s;
-}
-.progress-status {
-  font-size: 12px;
-  color: #78716C;
-  text-align: center;
+.source-icon.waiting { background: #E7E5E4; }
+.source-icon.running { background: #FBBF24; animation: pulse 1s ease-in-out infinite; }
+.source-icon.done { background: #22C55E; }
+.source-icon.error { background: #EF4444; }
+.source-icon.cancelled { background: #A8A29E; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
-.result-area {
-  margin-top: 20px;
-  display: none;
+.source-name {
+  font-size: 13px; font-weight: 500; color: #1C1917; width: 120px; flex-shrink: 0;
 }
+.source-bar-track {
+  flex: 1; height: 4px; background: #F5F5F4; border-radius: 2px; overflow: hidden;
+}
+.source-bar-fill {
+  height: 100%; border-radius: 2px; width: 0%;
+  transition: width 0.5s, background 0.3s;
+  background: #E7E5E4;
+}
+.source-bar-fill.running { background: #FBBF24; width: 60%; }
+.source-bar-fill.done { background: #22C55E; width: 100%; }
+.source-bar-fill.error { background: #EF4444; width: 100%; }
+.source-bar-fill.cancelled { background: #A8A29E; width: 30%; }
+
+.source-count {
+  font-size: 12px; font-weight: 600; color: #A8A29E; width: 60px; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.source-count.done { color: #22C55E; }
+.source-count.error { color: #EF4444; }
+
+/* ── Result ── */
+.result-area { margin-top: 20px; display: none; }
 .result-card {
-  background: #fff;
-  border: 1px solid #E7E5E4;
-  border-radius: 12px;
-  padding: 24px 28px;
-  text-align: center;
+  background: #fff; border: 1px solid #E7E5E4; border-radius: 12px;
+  padding: 24px 28px; text-align: center;
 }
-.result-count {
-  font-size: 48px;
-  font-weight: 700;
-  color: #1C1917;
-  letter-spacing: -0.03em;
-}
-.result-label {
-  font-size: 14px;
-  color: #78716C;
-  margin-top: 2px;
-  margin-bottom: 4px;
-}
-.result-breakdown {
-  font-size: 12px;
-  color: #A8A29E;
-  margin-bottom: 20px;
-}
+.result-count { font-size: 48px; font-weight: 700; color: #1C1917; letter-spacing: -0.03em; }
+.result-label { font-size: 14px; color: #78716C; margin-top: 2px; margin-bottom: 4px; }
+.result-breakdown { font-size: 12px; color: #A8A29E; margin-bottom: 20px; }
 .dl-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 32px;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 600;
-  border: none;
-  background: #1C1917;
-  color: #fff;
-  cursor: pointer;
-  font-family: 'Inter', sans-serif;
-  text-decoration: none;
-  transition: background 0.15s;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 12px 32px; border-radius: 8px; font-size: 15px; font-weight: 600;
+  border: none; background: #1C1917; color: #fff; cursor: pointer;
+  font-family: 'Inter', sans-serif; text-decoration: none; transition: background 0.15s;
 }
 .dl-btn:hover { background: #292524; }
 .dl-btn svg { width: 18px; height: 18px; }
 
-.footer {
-  text-align: center;
-  padding: 40px 24px;
-  font-size: 11px;
-  color: #D6D3D1;
-}
+.footer { text-align: center; padding: 40px 24px; font-size: 11px; color: #D6D3D1; }
 </style>
 </head>
 <body>
 
 <div class="hero">
-  <h1>Paper Sieve - 1:30 version</h1>
+  <h1>Paper Sieve - 6:30 version</h1>
   <p>Search academic papers across databases and download results as CSV</p>
 </div>
 
 <div class="search-wrap">
-  <form id="searchForm" onsubmit="startSearch(event)" class="search-box">
+  <div class="search-box">
 
     <div class="field-group">
       <label class="field-label">Topic / Domain</label>
@@ -401,17 +369,44 @@ body {
       </div>
     </div>
 
-    <button type="submit" class="submit-btn" id="searchBtn">
-      Search papers <span class="arrow">↗</span>
-    </button>
-
-    <div class="progress-area" id="progressArea">
-      <div class="progress-bar-track">
-        <div class="progress-bar-fill" id="progressFill"></div>
-      </div>
-      <div class="progress-status" id="progressStatus">Starting...</div>
+    <div class="btn-row">
+      <button type="button" class="submit-btn" id="searchBtn" onclick="startSearch()">
+        Search papers <span class="arrow" style="font-size:18px;opacity:.7">↗</span>
+      </button>
+      <button type="button" class="cancel-btn" id="cancelBtn" onclick="cancelSearch()">
+        Cancel
+      </button>
     </div>
 
+    <!-- Per-source progress -->
+    <div class="progress-area" id="progressArea">
+      <div class="source-row" id="row-arXiv">
+        <div class="source-icon waiting" id="icon-arXiv"></div>
+        <div class="source-name">arXiv</div>
+        <div class="source-bar-track"><div class="source-bar-fill" id="bar-arXiv"></div></div>
+        <div class="source-count" id="count-arXiv">—</div>
+      </div>
+      <div class="source-row" id="row-OpenAlex">
+        <div class="source-icon waiting" id="icon-OpenAlex"></div>
+        <div class="source-name">OpenAlex</div>
+        <div class="source-bar-track"><div class="source-bar-fill" id="bar-OpenAlex"></div></div>
+        <div class="source-count" id="count-OpenAlex">—</div>
+      </div>
+      <div class="source-row" id="row-Scopus">
+        <div class="source-icon waiting" id="icon-Scopus"></div>
+        <div class="source-name">Scopus</div>
+        <div class="source-bar-track"><div class="source-bar-fill" id="bar-Scopus"></div></div>
+        <div class="source-count" id="count-Scopus">—</div>
+      </div>
+      <div class="source-row" id="row-WoS">
+        <div class="source-icon waiting" id="icon-WoS"></div>
+        <div class="source-name">Web of Science</div>
+        <div class="source-bar-track"><div class="source-bar-fill" id="bar-WoS"></div></div>
+        <div class="source-count" id="count-WoS">—</div>
+      </div>
+    </div>
+
+    <!-- Results -->
     <div class="result-area" id="resultArea">
       <div class="result-card">
         <div class="result-count" id="resultCount">0</div>
@@ -424,20 +419,61 @@ body {
       </div>
     </div>
 
-  </form>
+  </div>
 </div>
 
 <div class="footer">Paper Sieve — arXiv · OpenAlex · Scopus · Web of Science</div>
 
 <script>
 let pollInterval = null;
+let currentJobId = null;
 
-async function startSearch(e) {
-  e.preventDefault();
+const SOURCE_MAP = {
+  'arXiv': 'arXiv',
+  'OpenAlex': 'OpenAlex',
+  'Scopus': 'Scopus',
+  'Web of Science': 'WoS'
+};
 
+function resetSourceRows() {
+  for (const [src, id] of Object.entries(SOURCE_MAP)) {
+    document.getElementById('icon-' + id).className = 'source-icon waiting';
+    document.getElementById('bar-' + id).className = 'source-bar-fill';
+    document.getElementById('bar-' + id).style.width = '0%';
+    document.getElementById('count-' + id).textContent = '—';
+    document.getElementById('count-' + id).className = 'source-count';
+  }
+}
+
+function updateSourceRow(src, status, count) {
+  const id = SOURCE_MAP[src];
+  if (!id) return;
+
+  const icon = document.getElementById('icon-' + id);
+  const bar = document.getElementById('bar-' + id);
+  const cnt = document.getElementById('count-' + id);
+
+  icon.className = 'source-icon ' + status;
+  bar.className = 'source-bar-fill ' + status;
+
+  if (status === 'done') {
+    cnt.textContent = count + ' papers';
+    cnt.className = 'source-count done';
+  } else if (status === 'error') {
+    cnt.textContent = 'error';
+    cnt.className = 'source-count error';
+  } else if (status === 'running') {
+    cnt.textContent = 'searching...';
+    cnt.className = 'source-count';
+  } else if (status === 'cancelled') {
+    cnt.textContent = 'cancelled';
+    cnt.className = 'source-count';
+  }
+}
+
+async function startSearch() {
   const topic = document.getElementById('topicInput').value.trim();
   const method = document.getElementById('methodInput').value.trim();
-
   if (!topic && !method) { alert('Enter at least one keyword'); return; }
 
   const keywords = [];
@@ -450,14 +486,15 @@ async function startSearch(e) {
     date_to: document.getElementById('dateTo').value,
   };
 
+  // UI setup
   const btn = document.getElementById('searchBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
   btn.disabled = true;
-  btn.innerHTML = 'Searching... <span class="arrow">↗</span>';
+  btn.innerHTML = 'Searching...';
+  cancelBtn.style.display = 'block';
   document.getElementById('progressArea').style.display = 'block';
   document.getElementById('resultArea').style.display = 'none';
-  document.getElementById('progressFill').style.width = '0%';
-  document.getElementById('progressFill').style.background = '#1C1917';
-  document.getElementById('progressStatus').textContent = 'Starting search...';
+  resetSourceRows();
 
   const res = await fetch('/api/search', {
     method: 'POST',
@@ -465,31 +502,33 @@ async function startSearch(e) {
     body: JSON.stringify(body),
   });
   const { job_id } = await res.json();
+  currentJobId = job_id;
 
-  let step = 0;
   pollInterval = setInterval(async () => {
     const r = await fetch('/api/status/' + job_id);
     const data = await r.json();
 
-    step++;
-    const pct = Math.min(step * 8, 90);
-    document.getElementById('progressFill').style.width = pct + '%';
-    document.getElementById('progressStatus').textContent = data.progress;
+    // Update each source row
+    if (data.sources) {
+      for (const [src, info] of Object.entries(data.sources)) {
+        updateSourceRow(src, info.status, info.count || 0);
+      }
+    }
 
     if (data.status === 'done') {
       clearInterval(pollInterval);
-      document.getElementById('progressFill').style.width = '100%';
-      document.getElementById('progressStatus').textContent = data.progress;
-
       btn.disabled = false;
-      btn.innerHTML = 'Search papers <span class="arrow">↗</span>';
+      btn.innerHTML = 'Search papers <span style="font-size:18px;opacity:.7">↗</span>';
+      cancelBtn.style.display = 'none';
 
       document.getElementById('resultArea').style.display = 'block';
       document.getElementById('resultCount').textContent = data.count;
 
       let breakdown = '';
-      for (const [src, cnt] of Object.entries(data.source_counts || {})) {
-        if (cnt > 0) breakdown += src + ': ' + cnt + '   ';
+      if (data.sources) {
+        for (const [src, info] of Object.entries(data.sources)) {
+          if (info.count > 0) breakdown += src + ': ' + info.count + '   ';
+        }
       }
       if (data.raw_count > data.count) {
         breakdown += '(' + (data.raw_count - data.count) + ' duplicates removed)';
@@ -498,15 +537,44 @@ async function startSearch(e) {
       document.getElementById('downloadBtn').href = '/api/download/' + job_id;
     }
 
+    if (data.status === 'cancelled') {
+      clearInterval(pollInterval);
+      btn.disabled = false;
+      btn.innerHTML = 'Search papers <span style="font-size:18px;opacity:.7">↗</span>';
+      cancelBtn.style.display = 'none';
+
+      // Mark remaining sources as cancelled
+      if (data.sources) {
+        for (const [src, info] of Object.entries(data.sources)) {
+          if (info.status === 'waiting' || info.status === 'running') {
+            updateSourceRow(src, 'cancelled', 0);
+          }
+        }
+      }
+
+      // Still show results if any were collected
+      if (data.count > 0) {
+        document.getElementById('resultArea').style.display = 'block';
+        document.getElementById('resultCount').textContent = data.count;
+        document.getElementById('resultBreakdown').textContent = 'Search was cancelled — partial results';
+        document.getElementById('downloadBtn').href = '/api/download/' + job_id;
+      }
+    }
+
     if (data.status === 'error') {
       clearInterval(pollInterval);
-      document.getElementById('progressFill').style.width = '100%';
-      document.getElementById('progressFill').style.background = '#EF4444';
-      document.getElementById('progressStatus').textContent = 'Error: ' + data.error;
       btn.disabled = false;
-      btn.innerHTML = 'Search papers <span class="arrow">↗</span>';
+      btn.innerHTML = 'Search papers <span style="font-size:18px;opacity:.7">↗</span>';
+      cancelBtn.style.display = 'none';
     }
-  }, 2000);
+  }, 1500);
+}
+
+async function cancelSearch() {
+  if (!currentJobId) return;
+  await fetch('/api/cancel/' + currentJobId, { method: 'POST' });
+  document.getElementById('cancelBtn').disabled = true;
+  document.getElementById('cancelBtn').textContent = 'Cancelling...';
 }
 </script>
 </body>
@@ -531,12 +599,16 @@ def api_search():
     job_id = str(uuid.uuid4())[:8]
     jobs[job_id] = {
         "status": "running",
-        "progress": "Starting...",
         "csv_path": None,
         "count": 0,
         "raw_count": 0,
-        "source_counts": {},
         "error": None,
+        "sources": {
+            "arXiv": {"status": "waiting", "count": 0},
+            "OpenAlex": {"status": "waiting", "count": 0},
+            "Scopus": {"status": "waiting", "count": 0},
+            "Web of Science": {"status": "waiting", "count": 0},
+        },
     }
 
     thread = threading.Thread(
@@ -554,6 +626,17 @@ def api_status(job_id):
     if not job:
         return jsonify({"status": "not_found"}), 404
     return jsonify(job)
+
+
+@app.route("/api/cancel/<job_id>", methods=["POST"])
+def api_cancel(job_id):
+    job = jobs.get(job_id)
+    if not job:
+        return jsonify({"status": "not_found"}), 404
+
+    # Mark as cancelled — the worker thread checks this between sources
+    job["status"] = "cancelled"
+    return jsonify({"status": "cancelled"})
 
 
 @app.route("/api/download/<job_id>")
