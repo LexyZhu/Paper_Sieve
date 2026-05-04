@@ -15,6 +15,8 @@ import uuid
 
 from search_arxiv import search_arxiv
 from search_openalex import search_openalex
+from search_scopus import search_scopus
+from search_wos import search_wos
 
 app = Flask(__name__)
 jobs = {}
@@ -71,6 +73,42 @@ def run_search(job_id, keywords, date_from, date_to):
             job["progress"] = f"OpenAlex: {len(results)} papers"
         except Exception as e:
             job["progress"] = f"OpenAlex error: {e}"
+
+        # need to delete after project marking
+        SCOPUS_API_KEY = "a6a4b4a8f0ff49676823b4b795cff8aa"
+        WOS_API_KEY = "296c7877068fd5bba5e70c4dd8540bfbbcf37346"
+
+        # Scopus
+        job["progress"] = "Searching Scopus..."
+        try:
+            results = search_scopus(
+                    keywords=keywords,
+                    api_key=SCOPUS_API_KEY,
+                    time_lower_bound=date_from,
+                    time_upper_bound=date_to,
+                )
+            for r in results:
+                    r["source"] = "Scopus"
+            all_results.extend(results)
+            job["progress"] = f"Scopus: {len(results)} papers"
+        except Exception as e:
+            job["progress"] = f"Scopus error: {e}"
+
+        # Web of Science
+        job["progress"] = "Searching Web of Science..."
+        try:
+            results = search_wos(
+                    keywords=keywords,
+                    api_key=WOS_API_KEY,
+                    time_lower_bound=date_from,
+                    time_upper_bound=date_to,
+                )
+            for r in results:
+                    r["source"] = "Web of Science"
+            all_results.extend(results)
+            job["progress"] = f"Web of Science: {len(results)} papers"
+        except Exception as e:
+            job["progress"] = f"Web of Science error: {e}"
 
         # Deduplicate & save
         job["progress"] = "Deduplicating..."
