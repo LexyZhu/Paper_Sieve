@@ -224,6 +224,29 @@ body {
   font-size: 21px;
   color: #756d66;
 }
+.description {
+  max-width: 760px;
+  margin: 0 auto 32px;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.description h2 {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7c6f64;
+  margin-bottom: 12px;
+}
+
+.description p {
+  max-width: 680px;
+  margin: 0 auto;
+  font-size: 16px;
+  line-height: 1.7;
+  color: #5f574f;
+}
 
 .search-wrap {
   max-width: 680px;
