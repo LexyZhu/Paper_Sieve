@@ -85,7 +85,7 @@ def search_arxiv(
             try:
                 published_date = entry.get("published", "")
                 published_date = published_date[:10]
-                print(published_date)
+                # print(published_date)
                 if time_lower_bound <= published_date <= time_upper_bound:
                     all_results.append({
                         "title": entry.title,
