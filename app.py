@@ -249,6 +249,110 @@ body {
   margin: 0;
 }
 
+.process {
+  max-width: 1180px;
+  margin: 8px auto 46px;
+  padding: 0 24px;
+  text-align: center;
+}
+
+.process-kicker {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #7c6f64;
+  margin-bottom: 14px;
+}
+
+.process h2 {
+  font-size: 42px;
+  line-height: 1.1;
+  font-weight: 850;
+  letter-spacing: -1.4px;
+  color: #1c2541;
+  margin-bottom: 46px;
+}
+
+.process-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 26px;
+  position: relative;
+}
+
+.process-step {
+  position: relative;
+  padding: 0 16px;
+}
+
+.process-icon {
+  font-size: 34px;
+  color: #756d66;
+  height: 42px;
+  margin-bottom: 18px;
+}
+
+.process-number {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 24px;
+  border-radius: 50%;
+  background: #17213d;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 800;
+  position: relative;
+  z-index: 2;
+}
+
+.process-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 96px;
+  left: calc(50% + 54px);
+  width: calc(100% - 56px);
+  border-top: 3px dashed rgba(124, 111, 100, 0.32);
+}
+
+.process-step h3 {
+  font-size: 22px;
+  color: #1c1917;
+  margin-bottom: 14px;
+}
+
+.process-step p {
+  max-width: 240px;
+  margin: 0 auto;
+  font-size: 16px;
+  line-height: 1.55;
+  color: #6f6862;
+}
+
+@media (max-width: 900px) {
+  .process-steps {
+    grid-template-columns: 1fr 1fr;
+    row-gap: 36px;
+  }
+
+  .process-step::after {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .process h2 {
+    font-size: 32px;
+  }
+
+  .process-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
 .search-wrap {
   max-width: 680px;
   margin: 0 auto;
@@ -462,6 +566,41 @@ body {
      Paper Sieve is a literature search tool designed to help users efficiently collect and deduplicate papers from arXiv, OpenAlex, Scopus, and Web of Science based on two sets of user-defined keywords and a specified publication time range.
 
   </p>
+</section>
+
+<section class="process">
+  <div class="process-kicker">The Process</div>
+  <h2>Search papers in minutes, not hours</h2>
+
+  <div class="process-steps">
+    <div class="process-step">
+      <div class="process-icon">⌕</div>
+      <div class="process-number">1</div>
+      <h3>Enter Keywords</h3>
+      <p>Provide two keyword groups. Terms within each group are OR-joined to broaden the search.</p>
+    </div>
+
+    <div class="process-step">
+      <div class="process-icon">↻</div>
+      <div class="process-number">2</div>
+      <h3>Search Databases</h3>
+      <p>Paper Sieve searches arXiv, OpenAlex, Scopus, and Web of Science within your selected time range.</p>
+    </div>
+
+    <div class="process-step">
+      <div class="process-icon">◇</div>
+      <div class="process-number">3</div>
+      <h3>Deduplicate</h3>
+      <p>Collected records are merged and duplicate papers are removed for a cleaner literature list.</p>
+    </div>
+
+    <div class="process-step">
+      <div class="process-icon">⇩</div>
+      <div class="process-number">4</div>
+      <h3>Export CSV</h3>
+      <p>Download the final results as a CSV file for screening, review, or further analysis.</p>
+    </div>
+  </div>
 </section>
 
 <div class="search-wrap">
