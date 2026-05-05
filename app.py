@@ -197,7 +197,7 @@ HTML = """
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   margin: 0;
-  font-family: Inter, Arial, sans-serif;
+  font-family: "Times New Roman", Times, serif;
   color: #1f1f1f;
   min-height: 100vh;
   background:
