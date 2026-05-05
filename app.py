@@ -1,22 +1,18 @@
-"""
-app.py — Paper Sieve Web App
-
-Clean web interface: users enter Topic/Domain and Methods/Tools keywords,
-pick a time range, and download a combined deduplicated CSV of papers
-from arXiv, OpenAlex, Scopus, and Web of Science.
-"""
-
 from flask import Flask, request, render_template_string, send_file, jsonify
 import os
 import re
 import csv
 import threading
 import uuid
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 from search_arxiv import search_arxiv
 from search_openalex import search_openalex
 from search_scopus import search_scopus
 from search_wos import search_wos
+
+
 
 app = Flask(__name__)
 jobs = {}
@@ -39,15 +35,36 @@ def normalize_title(title):
     return t
 
 
-def deduplicate(papers):
-    seen = set()
+def deduplicate(papers, threshold=0.8):
+    titles = [normalize_title(paper.get("title", "")) for paper in papers]
+
+    valid_items = [
+        (paper, title)
+        for paper, title in zip(papers, titles)
+        if title
+    ]
+
+    if not valid_items:
+        return []
+
     unique = []
-    for paper in papers:
-        key = normalize_title(paper.get("title", ""))
-        if not key or key in seen:
+    unique_titles = []
+
+    for paper, title in valid_items:
+        if not unique_titles:
+            unique.append(paper)
+            unique_titles.append(title)
             continue
-        seen.add(key)
-        unique.append(paper)
+
+        vectorizer = TfidfVectorizer().fit(unique_titles + [title])
+        vectors = vectorizer.transform(unique_titles + [title])
+
+        similarities = cosine_similarity(vectors[-1], vectors[:-1])[0]
+
+        if max(similarities) < threshold:
+            unique.append(paper)
+            unique_titles.append(title)
+
     return unique
 
 

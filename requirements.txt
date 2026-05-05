@@ -2,4 +2,7 @@ flask==3.1.0
 gunicorn==23.0.0
 feedparser==6.0.11
 requests==2.32.3
+scikit-learn>=1.3.0
+numpy
+scipy
 clarivate-wos-starter-python-client @ git+https://github.com/clarivate/wosstarter_python_client.git
