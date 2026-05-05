@@ -241,15 +241,6 @@ body {
   margin-bottom: 14px;
 }
 
-.process h2 {
-  font-size: 40px;
-  line-height: 1.1;
-  font-weight: 850;
-  letter-spacing: -1.4px;
-  color: #1c2541;
-  margin-bottom: 46px;
-}
-
 .process-steps {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -537,8 +528,7 @@ body {
 </div>
 
 <section class="process">
-  <div class="process-kicker">The Process</div>
-  <h2>Curate relevant papers in minutes, not hours</h2>
+  <div class="process-kicker">Curate relevant papers in minutes, not hours</div>
 
   <div class="process-steps">
     <div class="process-step">
