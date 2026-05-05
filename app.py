@@ -224,30 +224,6 @@ body {
   font-size: 21px;
   color: #756d66;
 }
-.description {
-  max-width: 760px;
-  margin: 0 auto 36px;
-  padding: 24px 32px;
-  text-align: left;
-  background: rgba(255, 255, 255, 0.52);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: 22px;
-  backdrop-filter: blur(14px);
-}
-
-.description h2 {
-  font-size: 18px;
-  font-weight: 800;
-  color: #1c1917;
-  margin-bottom: 10px;
-}
-
-.description p {
-  font-size: 16px;
-  line-height: 1.7;
-  color: #5f574f;
-  margin: 0;
-}
 
 .process {
   max-width: 780px;
@@ -559,14 +535,6 @@ body {
   <h1>Paper Sieve</h1>
   <p><strong>Author:</strong> Lexy Zhu</p>
 </div>
-
-<section class="description">
-  <h2>Description</h2>
-  <p>
-     Paper Sieve is a literature search tool designed to help users efficiently collect and deduplicate papers from arXiv, OpenAlex, Scopus, and Web of Science based on two sets of user-defined keywords and a specified publication time range.
-
-  </p>
-</section>
 
 <section class="process">
   <div class="process-kicker">The Process</div>
