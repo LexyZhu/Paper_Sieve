@@ -342,7 +342,7 @@ body {
 }
 
 .field-label {
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 700;
   color: #3d3833;
   margin-bottom: 7px;
@@ -350,7 +350,7 @@ body {
 }
 
 .field-hint {
-  font-size: 13px;
+  font-size: 16px;
   color: #9c948d;
   margin-bottom: 10px;
   display: block;
